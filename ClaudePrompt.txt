@@ -1,0 +1,19 @@
+Based on the database schema, I would like you :
+- create a .sql file which creates the database named jolimontbikerace, the different tables, the primary keys and the foreign keys, if any
+- create a WPF application whose GUI is split in the following sections :
+	1. Race Management
+		In this section, the user can :
+		- register a new race into the database. If the race already exists, prompt a warning alarm
+		- create different categories for the new registred race
+		- delete and existing race. If the race already has drivers associated, a prompt message telling the user that all results will be lost will be shown on the screen. Deleting a race doesn't delete the related drivers. deleting a race deletes all the results related to all categories of the race. deleting a race deletes also all the categories related to the race
+		- edit an existing race (modify the date/time and the race name)
+		- list all the races registered into the database. If the user selects a race in the list, the GUI must show the related categories and the number of drivers for each category
+		- For a selected race, the user can :
+			- add new drivers to the selected race.  (a dialog with all parameters to be filled is shown on the screen, with OK and Cancel buttons)
+			- select 
+	2. Drivers Management
+	  In this section the user can : 
+		- add drivers to the selected race
+		- associate existing drivers to the selected race
+		- List the drivers subscribed for a selected race
+		- handle the drivers (add new driver, delete existing drivers, modify the existing selected driver, list all the drivers, list all the drivers subscribed for an existing race)

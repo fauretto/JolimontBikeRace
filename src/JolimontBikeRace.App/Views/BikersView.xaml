@@ -1,0 +1,111 @@
+<UserControl x:Class="JolimontBikeRace.App.Views.BikersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="1200">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Bikers" Style="{StaticResource SectionHeaderStyle}" />
+
+        <!-- Top: search box, new biker button and count label. -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+            <TextBox Width="320" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Tag="Search bikers..." />
+            <Button Content="New Biker" Command="{Binding NewBikerCommand}" Margin="12,0,0,0" />
+            <TextBlock Text="{Binding Bikers.Count, StringFormat='{}{0} bikers'}" VerticalAlignment="Center" Margin="16,0,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}" />
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.6*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="1*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Center: read-only biker data grid. -->
+            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                <DataGrid ItemsSource="{Binding BikersView}" SelectedItem="{Binding SelectedBiker}" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Full Name" Binding="{Binding FullName}" Width="2*" />
+                        <DataGridTextColumn Header="Year Of Birth" Binding="{Binding YearOfBirth}" Width="1*" />
+                        <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="2*" />
+                        <DataGridTextColumn Header="Electronic Mail" Binding="{Binding ElectronicMailAddress}" Width="2*" />
+                        <DataGridTextColumn Header="Telephone" Binding="{Binding Telephone}" Width="1*" />
+                        <DataGridTextColumn Header="Mobile Telephone" Binding="{Binding MobileTelephone}" Width="1*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <!-- Right: biker detail editor, registration panel and registration history. -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Biker Details" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <TextBlock Text="First Name" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.FirstName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                            <TextBlock Text="Last Name" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.LastName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                            <TextBlock Text="Year Of Birth" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.YearOfBirth, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                            <TextBlock Text="Address" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.Address, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                            <TextBlock Text="Electronic Mail Address" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.ElectronicMailAddress, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                            <TextBlock Text="Telephone" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.Telephone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                            <TextBlock Text="Mobile Telephone" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding SelectedBiker.MobileTelephone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Save" Style="{StaticResource AccentButtonStyle}" Command="{Binding SaveBikerCommand}" Margin="0,0,8,0" />
+                                <Button Content="Delete" Style="{StaticResource DangerButtonStyle}" Command="{Binding DeleteBikerCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Register For A Race" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <TextBlock Text="Race" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <ComboBox ItemsSource="{Binding Races}" SelectedItem="{Binding SelectedRegistrationRace}"
+                                      DisplayMemberPath="Name" Margin="0,0,0,8" />
+                            <TextBlock Text="Category" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <ComboBox ItemsSource="{Binding RegistrationCategories}" SelectedItem="{Binding SelectedRegistrationCategory}"
+                                      DisplayMemberPath="Name" Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding CategoryRangeText}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8" />
+                            <TextBlock Text="Bib Number" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBox Text="{Binding BibNumberText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
+
+                            <Button Content="Register" Style="{StaticResource AccentButtonStyle}" Command="{Binding RegisterCommand}"
+                                    HorizontalAlignment="Right" Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource AccentDarkBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorderStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Registration History" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <ListView ItemsSource="{Binding RegistrationHistory}" MaxHeight="220">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="Race Identifier" DisplayMemberBinding="{Binding RaceIdentifier}" />
+                                        <GridViewColumn Header="Category Identifier" DisplayMemberBinding="{Binding CategoryIdentifier}" />
+                                        <GridViewColumn Header="Bib Number" DisplayMemberBinding="{Binding BibNumber}" />
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

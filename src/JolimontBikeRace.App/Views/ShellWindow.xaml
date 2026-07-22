@@ -1,0 +1,155 @@
+<Window x:Class="JolimontBikeRace.App.Views.ShellWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:viewModels="clr-namespace:JolimontBikeRace.App.ViewModels"
+        xmlns:views="clr-namespace:JolimontBikeRace.App.Views"
+        xmlns:converters="clr-namespace:JolimontBikeRace.App.Converters"
+        mc:Ignorable="d"
+        Title="Jolimont Bike Race" Height="800" Width="1300"
+        Background="{StaticResource SurfaceAltBrush}"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <converters:ObjectEqualsConverter x:Key="ObjectEqualsConverter" />
+
+        <!-- These data templates map each section view model to its corresponding view, so that
+             the content control below only ever needs to bind to CurrentViewModel. -->
+        <DataTemplate DataType="{x:Type viewModels:RaceManagerViewModel}">
+            <views:RaceManagerView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:BikersViewModel}">
+            <views:BikersView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:ChronoViewModel}">
+            <views:ChronoView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type viewModels:StandingsViewModel}">
+            <views:StandingsView />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Top header: application name and the shared active-race combo box. -->
+        <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Jolimont Bike Race" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Text="Active race:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextSecondaryBrush}" />
+                    <ComboBox Width="260" ItemsSource="{Binding Races}" SelectedItem="{Binding SelectedRace}" DisplayMemberPath="Name" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Left navigation rail. -->
+        <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" Background="{StaticResource AccentBrush}">
+            <TextBlock Text="JBR" Foreground="White" FontSize="26" FontWeight="Bold" Margin="20,20,20,30" />
+
+            <RadioButton Content="Race Manager" GroupName="Navigation" Style="{StaticResource NavigationRailButtonStyle}"
+                         Command="{Binding ShowRaceManagerCommand}">
+                <RadioButton.IsChecked>
+                    <MultiBinding Converter="{StaticResource ObjectEqualsConverter}" Mode="OneWay">
+                        <Binding Path="CurrentViewModel" />
+                        <Binding Path="RaceManagerViewModel" />
+                    </MultiBinding>
+                </RadioButton.IsChecked>
+            </RadioButton>
+            <RadioButton Content="Bikers" GroupName="Navigation" Style="{StaticResource NavigationRailButtonStyle}"
+                         Command="{Binding ShowBikersCommand}">
+                <RadioButton.IsChecked>
+                    <MultiBinding Converter="{StaticResource ObjectEqualsConverter}" Mode="OneWay">
+                        <Binding Path="CurrentViewModel" />
+                        <Binding Path="BikersViewModel" />
+                    </MultiBinding>
+                </RadioButton.IsChecked>
+            </RadioButton>
+            <RadioButton Content="Chrono" GroupName="Navigation" Style="{StaticResource NavigationRailButtonStyle}"
+                         Command="{Binding ShowChronoCommand}">
+                <RadioButton.IsChecked>
+                    <MultiBinding Converter="{StaticResource ObjectEqualsConverter}" Mode="OneWay">
+                        <Binding Path="CurrentViewModel" />
+                        <Binding Path="ChronoViewModel" />
+                    </MultiBinding>
+                </RadioButton.IsChecked>
+            </RadioButton>
+            <RadioButton Content="Standings" GroupName="Navigation" Style="{StaticResource NavigationRailButtonStyle}"
+                         Command="{Binding ShowStandingsCommand}">
+                <RadioButton.IsChecked>
+                    <MultiBinding Converter="{StaticResource ObjectEqualsConverter}" Mode="OneWay">
+                        <Binding Path="CurrentViewModel" />
+                        <Binding Path="StandingsViewModel" />
+                    </MultiBinding>
+                </RadioButton.IsChecked>
+            </RadioButton>
+
+            <Border Height="1" Background="#3A6EA5" Margin="20,20,20,10" />
+
+            <RadioButton Content="Exit" GroupName="Navigation" Style="{StaticResource NavigationRailButtonStyle}"
+                         Command="{Binding ExitCommand}" />
+        </StackPanel>
+
+        <!-- Main content area. -->
+        <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding CurrentViewModel}" Margin="0" />
+
+        <!-- Bottom status bar. -->
+        <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource StatusBarContainerStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,24,0">
+                    <Ellipse Margin="0,0,6,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse" BasedOn="{StaticResource StatusIndicatorDotStyle}">
+                                <Setter Property="Fill" Value="{StaticResource DisconnectedBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDatabaseConnected}" Value="True">
+                                        <Setter Property="Fill" Value="{StaticResource ConnectedBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="Disconnected" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDatabaseConnected}" Value="True">
+                                        <Setter Property="Text" Value="Connected" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" Text="{Binding SelectedRace.Name}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0" />
+
+                <TextBlock Grid.Column="2" Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+
+                <TextBlock Grid.Column="3" Text="{Binding LastSaveTime, StringFormat='Last save: {0:HH:mm:ss}'}"
+                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

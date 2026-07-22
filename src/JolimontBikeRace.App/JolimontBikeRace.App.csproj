@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\JolimontBikeRace.Core\JolimontBikeRace.Core.csproj" />
+    <ProjectReference Include="..\JolimontBikeRace.Data\JolimontBikeRace.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="log4net" Version="3.3.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="log4net.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

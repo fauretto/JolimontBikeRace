@@ -1,0 +1,77 @@
+<UserControl x:Class="JolimontBikeRace.App.Views.StandingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="700" d:DesignWidth="1100">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Standings" Style="{StaticResource SectionHeaderStyle}" />
+
+        <!-- Top: race selection, category checkboxes and Compute button. -->
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
+            <StackPanel>
+                <ComboBox ItemsSource="{Binding Races}" SelectedItem="{Binding SelectedRace}"
+                          DisplayMemberPath="Name" Width="280" HorizontalAlignment="Left" Margin="0,0,0,12" />
+
+                <TextBlock Text="Categories to include as separate tabs" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <ItemsControl ItemsSource="{Binding CategoryCheckboxes}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding CategoryName}" IsChecked="{Binding IsSelected}" Margin="0,4,20,4" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Button Content="Compute Standings" Style="{StaticResource AccentButtonStyle}"
+                        Command="{Binding ComputeStandingsCommand}" HorizontalAlignment="Left" Margin="0,12,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Tabs, one per category, each with a read-only standings grid. -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
+            <TabControl ItemsSource="{Binding CategoryStandingsList}" BorderThickness="0" Background="Transparent">
+                <TabControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding CategoryName}" Padding="8,4" />
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+                <TabControl.ContentTemplate>
+                    <DataTemplate>
+                        <DataGrid ItemsSource="{Binding Entries}" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Position" Binding="{Binding Position}" Width="1*" />
+                                <DataGridTextColumn Header="Bib" Binding="{Binding BibNumber}" Width="1*" />
+                                <DataGridTextColumn Header="Rider" Binding="{Binding BikerFullName}" Width="3*" />
+                                <DataGridTextColumn Header="Laps" Binding="{Binding CompletedLaps}" Width="1*" />
+                                <DataGridTextColumn Header="Race Time" Binding="{Binding RaceTime}" Width="1.5*" />
+                                <DataGridTextColumn Header="Gap" Binding="{Binding Gap}" Width="1.5*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+        </Border>
+
+        <!-- Bottom: Print, Export and Save actions. -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" Margin="0,0,16,0" />
+            <Button Content="Print" Command="{Binding PrintCommand}" Margin="0,0,8,0" />
+            <Button Content="Export CSV" Command="{Binding ExportCommaSeparatedValuesCommand}" Margin="0,0,8,0" />
+            <Button Content="Save To Database" Style="{StaticResource AccentButtonStyle}" Command="{Binding SaveToDatabaseCommand}" />
+        </StackPanel>
+    </Grid>
+</UserControl>
