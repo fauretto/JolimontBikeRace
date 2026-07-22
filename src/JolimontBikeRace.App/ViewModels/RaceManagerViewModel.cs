@@ -421,6 +421,7 @@ public class RaceManagerViewModel : ViewModelBase
         try
         {
             await _categoryRepository.UpdateAsync(SelectedCategory);
+            await LoadLinkedCategoriesAsync();
             StatusMessage = "Category saved.";
             LogService.Information("RaceManagerViewModel -> SaveCategoryAsync", $"saved category {SelectedCategory.Identifier}");
         }
