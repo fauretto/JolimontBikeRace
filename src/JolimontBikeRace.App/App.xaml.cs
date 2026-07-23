@@ -112,6 +112,7 @@ public partial class App : Application
 
         services.AddSingleton<IStandingsCalculatorService, StandingsCalculatorService>();
         services.AddSingleton<IBibNumberValidationService, BibNumberValidationService>();
+        services.AddSingleton<IRaceCollectionService, RaceCollectionService>();
 
         services.AddSingleton<RaceManagerViewModel>();
         services.AddSingleton<BikersViewModel>();

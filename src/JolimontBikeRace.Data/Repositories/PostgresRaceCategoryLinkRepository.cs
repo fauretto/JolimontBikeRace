@@ -63,8 +63,10 @@ public class PostgresRaceCategoryLinkRepository : IRaceCategoryLinkRepository
 
     /// <summary>
     /// Associates a category with a race. This operation is idempotent: calling it again for a
-    /// pair that is already linked has no additional effect, thanks to the ON CONFLICT DO NOTHING
-    /// clause applied to the unique (idrace, idcategory) pair.
+    /// pair that is already linked has no additional effect, thanks to the WHERE NOT EXISTS guard
+    /// that skips the insertion when the pair is already present. Idempotency is therefore
+    /// guaranteed independently of whether the database declares a unique constraint on the
+    /// (idrace, idcategory) pair.
     /// </summary>
     public async Task LinkAsync(long raceIdentifier, long categoryIdentifier)
     {
@@ -75,8 +77,10 @@ public class PostgresRaceCategoryLinkRepository : IRaceCategoryLinkRepository
 
             const string commandText = """
                 INSERT INTO race_category (idrace, idcategory)
-                VALUES (@idrace, @idcategory)
-                ON CONFLICT (idrace, idcategory) DO NOTHING
+                SELECT @idrace, @idcategory
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM race_category WHERE idrace = @idrace AND idcategory = @idcategory
+                )
                 """;
             await using var command = new NpgsqlCommand(commandText, connection);
             command.Parameters.AddWithValue("idrace", raceIdentifier);

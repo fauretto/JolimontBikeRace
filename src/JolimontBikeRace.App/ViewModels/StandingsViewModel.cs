@@ -19,7 +19,6 @@ namespace JolimontBikeRace.App.ViewModels;
 /// </summary>
 public class StandingsViewModel : ViewModelBase
 {
-    private readonly IRaceRepository _raceRepository;
     private readonly ICrossingRepository _crossingRepository;
     private readonly IRegistrationRepository _registrationRepository;
     private readonly IBikerRepository _bikerRepository;
@@ -27,6 +26,7 @@ public class StandingsViewModel : ViewModelBase
     private readonly IRaceCategoryLinkRepository _raceCategoryLinkRepository;
     private readonly IStandingsCalculatorService _standingsCalculatorService;
     private readonly IStandingRepository _standingRepository;
+    private readonly IRaceCollectionService _raceCollectionService;
 
     private IReadOnlyList<StandingEntry> _lastComputedStandings = new List<StandingEntry>();
 
@@ -36,8 +36,16 @@ public class StandingsViewModel : ViewModelBase
     /// <summary>
     /// Initializes a new instance of the <see cref="StandingsViewModel"/> class.
     /// </summary>
+    /// <param name="crossingRepository">The repository used to load the crossings of the selected race.</param>
+    /// <param name="registrationRepository">The repository used to load the registrations of the selected race.</param>
+    /// <param name="bikerRepository">The repository used to resolve biker full names.</param>
+    /// <param name="categoryRepository">The repository used to load every known category.</param>
+    /// <param name="raceCategoryLinkRepository">The repository used to load the categories linked to the selected race.</param>
+    /// <param name="standingsCalculatorService">The service used to compute the final classification.</param>
+    /// <param name="standingRepository">The repository used to persist the official results.</param>
+    /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
+    /// <param name="logService">The logging service used to record every standings operation.</param>
     public StandingsViewModel(
-        IRaceRepository raceRepository,
         ICrossingRepository crossingRepository,
         IRegistrationRepository registrationRepository,
         IBikerRepository bikerRepository,
@@ -45,10 +53,10 @@ public class StandingsViewModel : ViewModelBase
         IRaceCategoryLinkRepository raceCategoryLinkRepository,
         IStandingsCalculatorService standingsCalculatorService,
         IStandingRepository standingRepository,
+        IRaceCollectionService raceCollectionService,
         ILogService logService)
         : base(logService)
     {
-        _raceRepository = raceRepository;
         _crossingRepository = crossingRepository;
         _registrationRepository = registrationRepository;
         _bikerRepository = bikerRepository;
@@ -56,9 +64,9 @@ public class StandingsViewModel : ViewModelBase
         _raceCategoryLinkRepository = raceCategoryLinkRepository;
         _standingsCalculatorService = standingsCalculatorService;
         _standingRepository = standingRepository;
+        _raceCollectionService = raceCollectionService;
 
         Title = "Standings";
-        Races = new ObservableCollection<Race>();
         CategoryCheckboxes = new ObservableCollection<CategoryCheckboxRow>();
         CategoryStandingsList = new ObservableCollection<CategoryStandings>();
 
@@ -67,14 +75,12 @@ public class StandingsViewModel : ViewModelBase
         SaveToDatabaseCommand = new AsyncRelayCommand(SaveToDatabaseAsync, () => SelectedRace is not null && _lastComputedStandings.Count > 0);
         ExportCommaSeparatedValuesCommand = new RelayCommand(ExportCommaSeparatedValues, () => _lastComputedStandings.Count > 0);
         PrintCommand = new RelayCommand(Print, () => CategoryStandingsList.Count > 0);
-
-        _ = InitializeAsync();
     }
 
     /// <summary>
-    /// Gets the list of races available for selection.
+    /// Gets the single shared list of races owned by <see cref="IRaceCollectionService"/>.
     /// </summary>
-    public ObservableCollection<Race> Races { get; }
+    public ObservableCollection<Race> Races => _raceCollectionService.Races;
 
     /// <summary>
     /// Gets the checkbox rows representing every category linked to the selected race, letting the
@@ -140,26 +146,6 @@ public class StandingsViewModel : ViewModelBase
     /// Gets the command that prints the currently displayed standings.
     /// </summary>
     public RelayCommand PrintCommand { get; }
-
-    /// <summary>
-    /// Loads the list of races available for selection.
-    /// </summary>
-    public async Task InitializeAsync()
-    {
-        try
-        {
-            var races = await _raceRepository.GetAllAsync();
-            Races.Clear();
-            foreach (var race in races)
-            {
-                Races.Add(race);
-            }
-        }
-        catch (Exception exception)
-        {
-            LogService.Error("StandingsViewModel -> InitializeAsync", "failed to load races", exception);
-        }
-    }
 
     private async Task LoadCategoryCheckboxesAsync()
     {

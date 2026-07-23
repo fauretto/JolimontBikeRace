@@ -22,17 +22,22 @@
                 <ColumnDefinition Width="1.4*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left column: race list with filter and Add / Duplicate / Delete buttons. -->
+            <!-- Left column: race list with new-race name box and Add / Duplicate / Delete buttons. -->
             <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBox Grid.Row="0" Text="{Binding RaceFilterText, UpdateSourceTrigger=PropertyChanged}"
-                             Tag="Filter races..." Margin="0,0,0,10" />
+                    <TextBox Grid.Row="0" Text="{Binding NewRaceName, UpdateSourceTrigger=PropertyChanged}"
+                             Tag="New race name..." Margin="0,0,0,10">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding AddRaceCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
 
                     <ListBox Grid.Row="1" ItemsSource="{Binding Races}" SelectedItem="{Binding SelectedRace}"
                              DisplayMemberPath="Name" BorderThickness="0" />
@@ -42,6 +47,8 @@
                         <Button Content="Duplicate" Command="{Binding DuplicateRaceCommand}" Margin="0,0,8,0" />
                         <Button Content="Delete" Style="{StaticResource DangerButtonStyle}" Command="{Binding DeleteRaceCommand}" />
                     </StackPanel>
+
+                    <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Foreground="{StaticResource AccentDarkBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
                 </Grid>
             </Border>
 

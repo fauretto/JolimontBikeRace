@@ -16,11 +16,11 @@ namespace JolimontBikeRace.App.ViewModels;
 public class BikersViewModel : ViewModelBase
 {
     private readonly IBikerRepository _bikerRepository;
-    private readonly IRaceRepository _raceRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IRaceCategoryLinkRepository _raceCategoryLinkRepository;
     private readonly IRegistrationRepository _registrationRepository;
     private readonly IBibNumberValidationService _bibNumberValidationService;
+    private readonly IRaceCollectionService _raceCollectionService;
 
     private readonly ICollectionView _bikersView;
 
@@ -39,26 +39,32 @@ public class BikersViewModel : ViewModelBase
     /// <summary>
     /// Initializes a new instance of the <see cref="BikersViewModel"/> class.
     /// </summary>
+    /// <param name="bikerRepository">The repository used to load, create, update and delete bikers.</param>
+    /// <param name="categoryRepository">The repository used to load the categories available for registration.</param>
+    /// <param name="raceCategoryLinkRepository">The repository used to load the categories linked to the selected race.</param>
+    /// <param name="registrationRepository">The repository used to load and create registrations.</param>
+    /// <param name="bibNumberValidationService">The service used to validate and suggest bib numbers.</param>
+    /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
+    /// <param name="logService">The logging service used to record every biker and registration operation.</param>
     public BikersViewModel(
         IBikerRepository bikerRepository,
-        IRaceRepository raceRepository,
         ICategoryRepository categoryRepository,
         IRaceCategoryLinkRepository raceCategoryLinkRepository,
         IRegistrationRepository registrationRepository,
         IBibNumberValidationService bibNumberValidationService,
+        IRaceCollectionService raceCollectionService,
         ILogService logService)
         : base(logService)
     {
         _bikerRepository = bikerRepository;
-        _raceRepository = raceRepository;
         _categoryRepository = categoryRepository;
         _raceCategoryLinkRepository = raceCategoryLinkRepository;
         _registrationRepository = registrationRepository;
         _bibNumberValidationService = bibNumberValidationService;
+        _raceCollectionService = raceCollectionService;
 
         Title = "Bikers";
         Bikers = new ObservableCollection<Biker>();
-        Races = new ObservableCollection<Race>();
         RegistrationCategories = new ObservableCollection<Category>();
         RegistrationHistory = new ObservableCollection<Registration>();
 
@@ -84,9 +90,9 @@ public class BikersViewModel : ViewModelBase
     public ICollectionView BikersView => _bikersView;
 
     /// <summary>
-    /// Gets the list of races available for registration.
+    /// Gets the single shared list of races owned by <see cref="IRaceCollectionService"/>.
     /// </summary>
-    public ObservableCollection<Race> Races { get; }
+    public ObservableCollection<Race> Races => _raceCollectionService.Races;
 
     /// <summary>
     /// Gets the list of categories offered within the currently selected registration race.
@@ -219,7 +225,7 @@ public class BikersViewModel : ViewModelBase
     public AsyncRelayCommand RegisterCommand { get; }
 
     /// <summary>
-    /// Loads the full biker list and the list of races available for registration.
+    /// Loads the full biker list.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -231,18 +237,11 @@ public class BikersViewModel : ViewModelBase
             {
                 Bikers.Add(biker);
             }
-
-            var races = await _raceRepository.GetAllAsync();
-            Races.Clear();
-            foreach (var race in races)
-            {
-                Races.Add(race);
-            }
         }
         catch (Exception exception)
         {
-            LogService.Error("BikersViewModel -> InitializeAsync", "failed to load bikers and races", exception);
-            StatusMessage = "Failed to load bikers and races.";
+            LogService.Error("BikersViewModel -> InitializeAsync", "failed to load bikers", exception);
+            StatusMessage = "Failed to load bikers.";
         }
     }
 
@@ -297,7 +296,8 @@ public class BikersViewModel : ViewModelBase
             _registrationsForSelectedRace = registrations;
             _bibNumberByBikerIdentifierForSelectedRace = registrations
                 .Where(registration => registration.BibNumber.HasValue)
-                .ToDictionary(registration => registration.BikerIdentifier, registration => registration.BibNumber!.Value);
+                .GroupBy(registration => registration.BikerIdentifier)
+                .ToDictionary(group => group.Key, group => group.First().BibNumber!.Value);
 
             _bikersView.Refresh();
         }

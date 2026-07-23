@@ -17,11 +17,12 @@ public class RaceManagerViewModel : ViewModelBase
     private readonly IRaceRepository _raceRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IRaceCategoryLinkRepository _raceCategoryLinkRepository;
+    private readonly IRaceCollectionService _raceCollectionService;
 
     private Race? _selectedRace;
     private string _selectedRaceName = string.Empty;
     private Category? _selectedCategory;
-    private string _raceFilterText = string.Empty;
+    private string _newRaceName = string.Empty;
     private string _statusMessage = string.Empty;
 
     /// <summary>
@@ -30,24 +31,26 @@ public class RaceManagerViewModel : ViewModelBase
     /// <param name="raceRepository">The repository used to load, create, duplicate and delete races.</param>
     /// <param name="categoryRepository">The repository used to load, create, update and delete categories.</param>
     /// <param name="raceCategoryLinkRepository">The repository used to link and unlink categories to races.</param>
+    /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
     /// <param name="logService">The logging service used to record every creation, deletion and link change.</param>
     public RaceManagerViewModel(
         IRaceRepository raceRepository,
         ICategoryRepository categoryRepository,
         IRaceCategoryLinkRepository raceCategoryLinkRepository,
+        IRaceCollectionService raceCollectionService,
         ILogService logService)
         : base(logService)
     {
         _raceRepository = raceRepository;
         _categoryRepository = categoryRepository;
         _raceCategoryLinkRepository = raceCategoryLinkRepository;
+        _raceCollectionService = raceCollectionService;
 
         Title = "Race Manager";
-        Races = new ObservableCollection<Race>();
         Categories = new ObservableCollection<Category>();
         LinkedCategories = new ObservableCollection<CategoryLinkRow>();
 
-        AddRaceCommand = new AsyncRelayCommand(AddRaceAsync);
+        AddRaceCommand = new AsyncRelayCommand(AddRaceAsync, () => !string.IsNullOrWhiteSpace(NewRaceName));
         DeleteRaceCommand = new AsyncRelayCommand(DeleteRaceAsync, () => SelectedRace is not null);
         DuplicateRaceCommand = new AsyncRelayCommand(DuplicateRaceAsync, () => SelectedRace is not null);
         SaveRaceNameCommand = new AsyncRelayCommand(SaveRaceNameAsync, () => SelectedRace is not null);
@@ -59,9 +62,9 @@ public class RaceManagerViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Gets the list of races known to the application.
+    /// Gets the single shared list of races owned by <see cref="IRaceCollectionService"/>.
     /// </summary>
-    public ObservableCollection<Race> Races { get; }
+    public ObservableCollection<Race> Races => _raceCollectionService.Races;
 
     /// <summary>
     /// Gets the master list of categories known to the application.
@@ -75,12 +78,19 @@ public class RaceManagerViewModel : ViewModelBase
     public ObservableCollection<CategoryLinkRow> LinkedCategories { get; }
 
     /// <summary>
-    /// Gets or sets the text used to filter the list of races by name.
+    /// Gets or sets the name typed for the next race to create, bound to the text box above the
+    /// race list.
     /// </summary>
-    public string RaceFilterText
+    public string NewRaceName
     {
-        get => _raceFilterText;
-        set => SetProperty(ref _raceFilterText, value);
+        get => _newRaceName;
+        set
+        {
+            if (SetProperty(ref _newRaceName, value))
+            {
+                AddRaceCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -137,7 +147,7 @@ public class RaceManagerViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Gets the command that creates a new, empty race.
+    /// Gets the command that creates a new race using the typed name.
     /// </summary>
     public AsyncRelayCommand AddRaceCommand { get; }
 
@@ -173,32 +183,23 @@ public class RaceManagerViewModel : ViewModelBase
     public AsyncRelayCommand SaveCategoryCommand { get; }
 
     /// <summary>
-    /// Loads the list of races and the master list of categories from the database.
+    /// Loads the master list of categories from the database.
     /// </summary>
     public async Task InitializeAsync()
     {
         try
         {
-            var races = await _raceRepository.GetAllAsync();
-            Races.Clear();
-            foreach (var race in races)
-            {
-                Races.Add(race);
-            }
-
             var categories = await _categoryRepository.GetAllAsync();
             Categories.Clear();
             foreach (var category in categories)
             {
                 Categories.Add(category);
             }
-
-            SelectedRace ??= Races.FirstOrDefault();
         }
         catch (Exception exception)
         {
-            LogService.Error("RaceManagerViewModel -> InitializeAsync", "failed to load races and categories", exception);
-            StatusMessage = "Failed to load races and categories.";
+            LogService.Error("RaceManagerViewModel -> InitializeAsync", "failed to load categories", exception);
+            StatusMessage = "Failed to load categories.";
         }
     }
 
@@ -228,6 +229,13 @@ public class RaceManagerViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Persists the linked state of a category for the selected race whenever the corresponding
+    /// checkbox is toggled. On failure, the checkbox is reverted to its previous state so the
+    /// displayed value stays consistent with what is actually stored in the database.
+    /// </summary>
+    /// <param name="row">The row whose checkbox was toggled.</param>
+    /// <param name="isLinked">The new linked state requested by the user.</param>
     private async Task OnCategoryLinkToggledAsync(CategoryLinkRow row, bool isLinked)
     {
         if (SelectedRace is null)
@@ -241,31 +249,59 @@ public class RaceManagerViewModel : ViewModelBase
             {
                 await _raceCategoryLinkRepository.LinkAsync(SelectedRace.Identifier, row.Category.Identifier);
                 LogService.Information("RaceManagerViewModel -> OnCategoryLinkToggledAsync", $"linked category {row.Category.Name} to race {SelectedRace.Name}");
+                StatusMessage = $"Category \"{row.Category.Name}\" linked to \"{SelectedRace.Name}\".";
             }
             else
             {
                 await _raceCategoryLinkRepository.UnlinkAsync(SelectedRace.Identifier, row.Category.Identifier);
                 LogService.Information("RaceManagerViewModel -> OnCategoryLinkToggledAsync", $"unlinked category {row.Category.Name} from race {SelectedRace.Name}");
+                StatusMessage = $"Category \"{row.Category.Name}\" unlinked from \"{SelectedRace.Name}\".";
             }
         }
         catch (Exception exception)
         {
             LogService.Error("RaceManagerViewModel -> OnCategoryLinkToggledAsync", $"failed to change link between race {SelectedRace.Identifier} and category {row.Category.Identifier}", exception);
             StatusMessage = "Failed to update category link.";
+            row.RevertIsLinked(!isLinked);
         }
     }
 
+    /// <summary>
+    /// Creates a new race using the name typed into the new-race name text box, warning the user
+    /// instead of creating the race when a race with the same name, compared case-insensitively,
+    /// already exists.
+    /// </summary>
     private async Task AddRaceAsync()
     {
         try
         {
-            var newRace = new Race { Name = "New Race" };
+            var raceName = NewRaceName.Trim();
+            if (raceName.Length == 0)
+            {
+                return;
+            }
+
+            if (Races.Any(race => string.Equals(race.Name, raceName, StringComparison.OrdinalIgnoreCase)))
+            {
+                LogService.Warning("RaceManagerViewModel -> AddRaceAsync", $"rejected creation of race '{raceName}' because a race with the same name already exists");
+                MessageBox.Show(
+                    $"A race named \"{raceName}\" already exists.",
+                    "Duplicate Race",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            var newRace = new Race { Name = raceName };
             var newIdentifier = await _raceRepository.AddAsync(newRace);
             newRace.Identifier = newIdentifier;
             Races.Add(newRace);
             SelectedRace = newRace;
 
             LogService.Information("RaceManagerViewModel -> AddRaceAsync", $"created race {newRace.Name} with identifier {newRace.Identifier}");
+
+            NewRaceName = string.Empty;
+            StatusMessage = $"Race \"{raceName}\" created.";
         }
         catch (Exception exception)
         {
@@ -481,5 +517,16 @@ public class CategoryLinkRow : ObservableObject
                 _ = _onToggled(this, value);
             }
         }
+    }
+
+    /// <summary>
+    /// Restores the linked state shown by the checkbox without triggering the persistence
+    /// callback, used when saving the toggle to the database has failed.
+    /// </summary>
+    /// <param name="value">The linked state to display.</param>
+    public void RevertIsLinked(bool value)
+    {
+        _isLinked = value;
+        OnPropertyChanged(nameof(IsLinked));
     }
 }

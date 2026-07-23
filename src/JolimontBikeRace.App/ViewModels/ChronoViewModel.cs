@@ -23,6 +23,7 @@ public class ChronoViewModel : ViewModelBase
     private readonly IRegistrationRepository _registrationRepository;
     private readonly IBikerRepository _bikerRepository;
     private readonly IRaceStandingsJournalService _journalService;
+    private readonly IRaceCollectionService _raceCollectionService;
     private readonly string _journalFolderPath;
 
     private readonly DispatcherTimer _clockTimer;
@@ -48,12 +49,21 @@ public class ChronoViewModel : ViewModelBase
     /// <summary>
     /// Initializes a new instance of the <see cref="ChronoViewModel"/> class.
     /// </summary>
+    /// <param name="raceRepository">The repository used to record race start instants.</param>
+    /// <param name="crossingRepository">The repository used to record, update and delete crossings.</param>
+    /// <param name="registrationRepository">The repository used to load the registrations of the selected race.</param>
+    /// <param name="bikerRepository">The repository used to resolve biker full names.</param>
+    /// <param name="journalService">The service used to read and write the XML race standings journal.</param>
+    /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
+    /// <param name="configuration">The application configuration, used to resolve the journal folder path.</param>
+    /// <param name="logService">The logging service used to record every timing operation.</param>
     public ChronoViewModel(
         IRaceRepository raceRepository,
         ICrossingRepository crossingRepository,
         IRegistrationRepository registrationRepository,
         IBikerRepository bikerRepository,
         IRaceStandingsJournalService journalService,
+        IRaceCollectionService raceCollectionService,
         IConfiguration configuration,
         ILogService logService)
         : base(logService)
@@ -63,10 +73,10 @@ public class ChronoViewModel : ViewModelBase
         _registrationRepository = registrationRepository;
         _bikerRepository = bikerRepository;
         _journalService = journalService;
+        _raceCollectionService = raceCollectionService;
         _journalFolderPath = configuration["Journal:FolderPath"] ?? "Journal";
 
         Title = "Chrono";
-        Races = new ObservableCollection<Race>();
         Crossings = new ObservableCollection<CrossingRow>();
 
         StartRaceCommand = new AsyncRelayCommand(StartRaceAsync, () => SelectedRace is not null);
@@ -82,14 +92,12 @@ public class ChronoViewModel : ViewModelBase
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _clockTimer.Tick += (_, _) => OnClockTick();
         _clockTimer.Start();
-
-        _ = InitializeRacesAsync();
     }
 
     /// <summary>
-    /// Gets the list of races available for selection.
+    /// Gets the single shared list of races owned by <see cref="IRaceCollectionService"/>.
     /// </summary>
-    public ObservableCollection<Race> Races { get; }
+    public ObservableCollection<Race> Races => _raceCollectionService.Races;
 
     /// <summary>
     /// Gets the list of recorded crossings, shown newest first.
@@ -225,23 +233,6 @@ public class ChronoViewModel : ViewModelBase
     /// </summary>
     public AsyncRelayCommand ForceDatabaseSynchronizationCommand { get; }
 
-    private async Task InitializeRacesAsync()
-    {
-        try
-        {
-            var races = await _raceRepository.GetAllAsync();
-            Races.Clear();
-            foreach (var race in races)
-            {
-                Races.Add(race);
-            }
-        }
-        catch (Exception exception)
-        {
-            LogService.Error("ChronoViewModel -> InitializeRacesAsync", "failed to load races", exception);
-        }
-    }
-
     private void OnClockTick()
     {
         CurrentTimeOfDay = TickFormattingHelper.FormatTimeOfDay(DateTime.Now.Ticks);
@@ -252,9 +243,16 @@ public class ChronoViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Loads the registrations, bikers and existing crossings of the currently selected race.
+    /// When the race registrations contain duplicated bib numbers, this method tolerates the
+    /// duplication by keeping only the first registration of each duplicated bib number for
+    /// timing purposes, and warns the user that the duplicated registrations must be corrected.
+    /// </summary>
     private async Task LoadRaceContextAsync()
     {
         Crossings.Clear();
+        UndoLastCrossingCommand.NotifyCanExecuteChanged();
         _lapCountByBikerIdentifier = new Dictionary<long, int>();
         _bibNumberByBikerIdentifier = new Dictionary<long, int>();
         _registrationsByBibNumber = new Dictionary<int, Registration>();
@@ -272,12 +270,34 @@ public class ChronoViewModel : ViewModelBase
         try
         {
             var registrations = await _registrationRepository.GetForRaceAsync(SelectedRace.Identifier);
-            _registrationsByBibNumber = registrations
+            var registrationsWithBibNumber = registrations
                 .Where(registration => registration.BibNumber.HasValue)
-                .ToDictionary(registration => registration.BibNumber!.Value, registration => registration);
-            _bibNumberByBikerIdentifier = registrations
-                .Where(registration => registration.BibNumber.HasValue)
-                .ToDictionary(registration => registration.BikerIdentifier, registration => registration.BibNumber!.Value);
+                .ToList();
+
+            _registrationsByBibNumber = registrationsWithBibNumber
+                .GroupBy(registration => registration.BibNumber!.Value)
+                .ToDictionary(group => group.Key, group => group.First());
+            _bibNumberByBikerIdentifier = registrationsWithBibNumber
+                .GroupBy(registration => registration.BikerIdentifier)
+                .ToDictionary(group => group.Key, group => group.First().BibNumber!.Value);
+
+            var duplicatedBibNumbers = registrationsWithBibNumber
+                .GroupBy(registration => registration.BibNumber!.Value)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .OrderBy(bibNumber => bibNumber)
+                .ToList();
+            if (duplicatedBibNumbers.Count > 0)
+            {
+                LogService.Warning("ChronoViewModel -> LoadRaceContextAsync", $"race {SelectedRace.Identifier} contains duplicated bib numbers: {string.Join(", ", duplicatedBibNumbers)}");
+                MessageBox.Show(
+                    $"The registrations of race \"{SelectedRace.Name}\" contain duplicated bib numbers: "
+                    + $"{string.Join(", ", duplicatedBibNumbers)}. Only the first registration of each "
+                    + "duplicated bib number will be used for timing. Please correct the registrations.",
+                    "Duplicated Bib Numbers",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
 
             var bikers = await _bikerRepository.GetAllAsync();
             _bikersByIdentifier = bikers.ToDictionary(biker => biker.Identifier);
@@ -306,6 +326,8 @@ public class ChronoViewModel : ViewModelBase
         }
 
         _nextSequenceIndex = orderedCrossings.Count == 0 ? 1 : orderedCrossings.Max(crossing => crossing.SequenceIndex) + 1;
+
+        UndoLastCrossingCommand.NotifyCanExecuteChanged();
     }
 
     private CrossingRow BuildRowForCrossing(Crossing crossing)
@@ -553,7 +575,9 @@ public class ChronoViewModel : ViewModelBase
             SelectedRace.StartTicks = 0;
             IsRaceRunning = false;
             Crossings.Clear();
+            UndoLastCrossingCommand.NotifyCanExecuteChanged();
             _lapCountByBikerIdentifier.Clear();
+            _nextSequenceIndex = 1;
             ElapsedTime = "0:00:00";
 
             LogService.Warning("ChronoViewModel -> ResetRaceAsync", $"race {SelectedRace.Identifier} fully reset: start time and all crossings cleared");
@@ -585,6 +609,7 @@ public class ChronoViewModel : ViewModelBase
         {
             await _crossingRepository.DeleteAllForRaceAsync(SelectedRace.Identifier);
             Crossings.Clear();
+            UndoLastCrossingCommand.NotifyCanExecuteChanged();
             _lapCountByBikerIdentifier.Clear();
             _nextSequenceIndex = 1;
 
@@ -596,6 +621,14 @@ public class ChronoViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Reloads the crossings of the selected race from a previously saved XML journal file, asking
+    /// for confirmation before permanently replacing every recorded crossing of the selected race,
+    /// and warning when the journal file belongs to a different race than the one currently
+    /// selected. Because the replacement deletes and re-inserts every row, the crossings are
+    /// reloaded from the database afterwards so that the displayed rows carry their new database
+    /// identifiers.
+    /// </summary>
     private async Task LoadJournalAsync()
     {
         if (SelectedRace is null)
@@ -618,6 +651,36 @@ public class ChronoViewModel : ViewModelBase
         {
             var (crossings, startRaceTicks) = _journalService.LoadJournal(openFileDialog.FileName);
 
+            var journalRaceIdentifiers = crossings
+                .Select(crossing => crossing.RaceIdentifier)
+                .Where(raceIdentifier => raceIdentifier > 0)
+                .Distinct()
+                .ToList();
+            var belongsToAnotherRace = journalRaceIdentifiers.Count > 0
+                && !journalRaceIdentifiers.Contains(SelectedRace.Identifier);
+            if (belongsToAnotherRace)
+            {
+                LogService.Warning("ChronoViewModel -> LoadJournalAsync", $"journal file {openFileDialog.FileName} belongs to race {string.Join(", ", journalRaceIdentifiers)} but race {SelectedRace.Identifier} is selected");
+            }
+
+            var confirmationText = belongsToAnotherRace
+                ? $"The selected journal file belongs to a different race (race identifier "
+                  + $"{string.Join(", ", journalRaceIdentifiers)}), not to \"{SelectedRace.Name}\". "
+                  + $"Loading it will permanently replace every recorded crossing of \"{SelectedRace.Name}\" "
+                  + $"with the {crossings.Count} crossings of the journal file. Continue?"
+                : $"This will permanently replace every recorded crossing of race \"{SelectedRace.Name}\" "
+                  + $"in the database with the {crossings.Count} crossings of the selected journal file. Continue?";
+
+            var confirmationResult = MessageBox.Show(
+                confirmationText,
+                "Confirm Journal Load",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (confirmationResult != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
             await _crossingRepository.ReplaceAllForRaceAsync(SelectedRace.Identifier, crossings);
 
             if (startRaceTicks > 0)
@@ -626,8 +689,11 @@ public class ChronoViewModel : ViewModelBase
                 SelectedRace.StartTicks = startRaceTicks;
             }
 
-            LoadCrossingsIntoUi(crossings);
+            var reloadedCrossings = await _crossingRepository.GetForRaceAsync(SelectedRace.Identifier);
+            LoadCrossingsIntoUi(reloadedCrossings);
             IsRaceRunning = SelectedRace.HasStarted;
+
+            AutosaveStatusText = $"Journal loaded ({crossings.Count} crossings).";
 
             LogService.Information("ChronoViewModel -> LoadJournalAsync", $"loaded {crossings.Count} crossings from journal {openFileDialog.FileName} into race {SelectedRace.Identifier}");
         }
@@ -637,6 +703,12 @@ public class ChronoViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Explicitly commits every crossing currently held in memory to the database by replacing
+    /// every crossing of the selected race with the crossings currently shown in the grid. Because
+    /// the replacement deletes and re-inserts every row, the crossings are reloaded from the
+    /// database afterwards so that the displayed rows carry their new database identifiers.
+    /// </summary>
     private async Task ForceDatabaseSynchronizationAsync()
     {
         if (SelectedRace is null)
@@ -648,6 +720,10 @@ public class ChronoViewModel : ViewModelBase
         {
             var crossings = Crossings.Select(row => row.Crossing).OrderBy(crossing => crossing.SequenceIndex).ToList();
             await _crossingRepository.ReplaceAllForRaceAsync(SelectedRace.Identifier, crossings);
+
+            var reloadedCrossings = await _crossingRepository.GetForRaceAsync(SelectedRace.Identifier);
+            LoadCrossingsIntoUi(reloadedCrossings);
+
             LastSaveTime = DateTime.Now;
             AutosaveStatusText = $"Database synchronized at {LastSaveTime:HH:mm:ss}.";
 

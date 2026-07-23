@@ -14,8 +14,8 @@ namespace JolimontBikeRace.App.ViewModels;
 /// </summary>
 public class ShellViewModel : ViewModelBase
 {
-    private readonly IRaceRepository _raceRepository;
     private readonly IDatabaseConnectionService _databaseConnectionService;
+    private readonly IRaceCollectionService _raceCollectionService;
 
     private ViewModelBase _currentViewModel;
     private Race? _selectedRace;
@@ -26,16 +26,16 @@ public class ShellViewModel : ViewModelBase
     /// <summary>
     /// Initializes a new instance of the <see cref="ShellViewModel"/> class.
     /// </summary>
-    /// <param name="raceRepository">The repository used to load the list of races at startup.</param>
     /// <param name="databaseConnectionService">The service used to verify database connectivity.</param>
+    /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
     /// <param name="raceManagerViewModel">The Race Manager section view model.</param>
     /// <param name="bikersViewModel">The Bikers section view model.</param>
     /// <param name="chronoViewModel">The Chrono section view model.</param>
     /// <param name="standingsViewModel">The Standings section view model.</param>
     /// <param name="logService">The logging service used to record navigation and startup events.</param>
     public ShellViewModel(
-        IRaceRepository raceRepository,
         IDatabaseConnectionService databaseConnectionService,
+        IRaceCollectionService raceCollectionService,
         RaceManagerViewModel raceManagerViewModel,
         BikersViewModel bikersViewModel,
         ChronoViewModel chronoViewModel,
@@ -43,8 +43,8 @@ public class ShellViewModel : ViewModelBase
         ILogService logService)
         : base(logService)
     {
-        _raceRepository = raceRepository;
         _databaseConnectionService = databaseConnectionService;
+        _raceCollectionService = raceCollectionService;
 
         RaceManagerViewModel = raceManagerViewModel;
         BikersViewModel = bikersViewModel;
@@ -52,7 +52,6 @@ public class ShellViewModel : ViewModelBase
         StandingsViewModel = standingsViewModel;
 
         Title = "Jolimont Bike Race";
-        Races = new ObservableCollection<Race>();
 
         _currentViewModel = raceManagerViewModel;
 
@@ -94,9 +93,9 @@ public class ShellViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Gets the list of races known to the application, shared by every section.
+    /// Gets the single shared list of races owned by <see cref="IRaceCollectionService"/>.
     /// </summary>
-    public ObservableCollection<Race> Races { get; }
+    public ObservableCollection<Race> Races => _raceCollectionService.Races;
 
     /// <summary>
     /// Gets or sets the race that is currently active, shared by every section through the top
@@ -183,12 +182,7 @@ public class ShellViewModel : ViewModelBase
             IsDatabaseConnected = await _databaseConnectionService.TestConnectionAsync();
             StatusMessage = IsDatabaseConnected ? "Connected to database." : "Database unreachable.";
 
-            var races = await _raceRepository.GetAllAsync();
-            Races.Clear();
-            foreach (var race in races)
-            {
-                Races.Add(race);
-            }
+            await _raceCollectionService.ReloadAsync();
 
             SelectedRace ??= Races.FirstOrDefault();
 
