@@ -23,4 +23,14 @@ public interface IStandingsCalculatorService
         IReadOnlyList<Registration> registrations,
         IReadOnlyList<Biker> bikers,
         IReadOnlyList<Category> categories);
+
+    /// <summary>
+    /// Produces a category-local classification from an already-ranked subset of standing entries
+    /// that all belong to the same category, renumbering positions from one and recomputing gaps
+    /// relative to the category leader. New instances are returned, leaving the input untouched.
+    /// </summary>
+    /// <param name="categoryEntries">The standing entries of a single category, in overall finishing order.</param>
+    /// <param name="raceStartTicks">The race start instant, in ticks, used to compute each entry's whole-second classification time.</param>
+    /// <returns>A category-local ranked classification, one new entry per input entry.</returns>
+    IReadOnlyList<StandingEntry> RankWithinCategory(IReadOnlyList<StandingEntry> categoryEntries, long raceStartTicks);
 }

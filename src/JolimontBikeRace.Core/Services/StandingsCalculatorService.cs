@@ -77,6 +77,7 @@ public class StandingsCalculatorService : IStandingsCalculatorService
         // The leader is the rider in first position after ordering, used as the reference point
         // for every other rider's gap.
         var leader = orderedRiders.FirstOrDefault();
+        var leaderClassificationSeconds = leader is null ? 0 : ClassificationSeconds(leader.LastCrossingTicks, race.StartTicks);
 
         for (var rankIndex = 0; rankIndex < orderedRiders.Count; rankIndex++)
         {
@@ -87,21 +88,9 @@ public class StandingsCalculatorService : IStandingsCalculatorService
                 ? TickFormattingHelper.FormatElapsedTime(rider.LastCrossingTicks - race.StartTicks)
                 : string.Empty;
 
-            string gap;
-            if (leader is null || position == 1)
-            {
-                // The race leader never has a gap to display.
-                gap = string.Empty;
-            }
-            else if (rider.CompletedLaps < leader.CompletedLaps)
-            {
-                var lapDeficit = leader.CompletedLaps - rider.CompletedLaps;
-                gap = lapDeficit == 1 ? "+1 lap" : $"+{lapDeficit} laps";
-            }
-            else
-            {
-                gap = TickFormattingHelper.FormatGap(rider.LastCrossingTicks - leader.LastCrossingTicks);
-            }
+            var gap = leader is null
+                ? string.Empty
+                : ComputeGap(position, rider.CompletedLaps, ClassificationSeconds(rider.LastCrossingTicks, race.StartTicks), leader.CompletedLaps, leaderClassificationSeconds);
 
             registrationByBikerIdentifier.TryGetValue(rider.BikerIdentifier, out var registration);
             bikerByIdentifier.TryGetValue(rider.BikerIdentifier, out var biker);
@@ -127,5 +116,100 @@ public class StandingsCalculatorService : IStandingsCalculatorService
         }
 
         return standingEntries;
+    }
+
+    /// <summary>
+    /// Produces a category-local classification from an already-ranked subset of standing entries
+    /// that all belong to the same category. The subset is expected to be in overall finishing
+    /// order (as produced by <see cref="ComputeStandings"/> and filtered by category); this method
+    /// renumbers the positions from one and recomputes every gap relative to the category leader,
+    /// that is, the first entry of the subset. New <see cref="StandingEntry"/> instances are
+    /// returned so that the original overall entries, and any results already persisted, are left
+    /// unchanged.
+    /// </summary>
+    /// <param name="categoryEntries">The standing entries of a single category, in overall finishing order.</param>
+    /// <param name="raceStartTicks">The race start instant, in ticks, used to compute each entry's whole-second classification time.</param>
+    /// <returns>A category-local ranked classification, one new entry per input entry.</returns>
+    public IReadOnlyList<StandingEntry> RankWithinCategory(IReadOnlyList<StandingEntry> categoryEntries, long raceStartTicks)
+    {
+        var leader = categoryEntries.FirstOrDefault();
+        var leaderClassificationSeconds = leader is null ? 0 : ClassificationSeconds(leader.Ticks, raceStartTicks);
+        var rankedEntries = new List<StandingEntry>();
+
+        for (var index = 0; index < categoryEntries.Count; index++)
+        {
+            var entry = categoryEntries[index];
+            var position = index + 1;
+            var gap = leader is null
+                ? string.Empty
+                : ComputeGap(position, entry.CompletedLaps, ClassificationSeconds(entry.Ticks, raceStartTicks), leader.CompletedLaps, leaderClassificationSeconds);
+
+            rankedEntries.Add(new StandingEntry
+            {
+                Identifier = entry.Identifier,
+                BikerIdentifier = entry.BikerIdentifier,
+                RaceIdentifier = entry.RaceIdentifier,
+                Position = position,
+                Ticks = entry.Ticks,
+                RaceTime = entry.RaceTime,
+                Gap = gap,
+                CompletedLaps = entry.CompletedLaps,
+                BikerFullName = entry.BikerFullName,
+                BibNumber = entry.BibNumber,
+                CategoryName = entry.CategoryName,
+            });
+        }
+
+        return rankedEntries;
+    }
+
+    /// <summary>
+    /// Computes the formatted gap of a rider to the classification leader, applying the same
+    /// rules used by <see cref="ComputeStandings"/>: the leader never has a gap; a rider who
+    /// completed fewer laps than the leader is reported as a lap deficit, because that cannot
+    /// meaningfully be expressed as a time difference; otherwise the gap is the formatted time
+    /// difference between the rider's last crossing instant and the leader's.
+    /// </summary>
+    /// <param name="position">The one-based position of the rider in the classification.</param>
+    /// <param name="completedLaps">The number of laps completed by the rider.</param>
+    /// <param name="classificationSeconds">The rider's classification time, in whole seconds.</param>
+    /// <param name="leaderCompletedLaps">The number of laps completed by the classification leader.</param>
+    /// <param name="leaderClassificationSeconds">The classification leader's classification time, in whole seconds.</param>
+    /// <returns>The formatted gap, or an empty string when the rider is the leader.</returns>
+    private static string ComputeGap(int position, int completedLaps, long classificationSeconds, int leaderCompletedLaps, long leaderClassificationSeconds)
+    {
+        // The leader, always in first position, never has a gap to display.
+        if (position == 1)
+        {
+            return string.Empty;
+        }
+
+        // A lap deficit cannot meaningfully be expressed as a time difference, so it is reported
+        // as a number of laps instead.
+        if (completedLaps < leaderCompletedLaps)
+        {
+            var lapDeficit = leaderCompletedLaps - completedLaps;
+            return lapDeficit == 1 ? "+1 lap" : $"+{lapDeficit} laps";
+        }
+
+        // The gap is the difference of the two whole-second race times, so it always agrees with
+        // the values shown in the race-time column.
+        return TickFormattingHelper.FormatGap((classificationSeconds - leaderClassificationSeconds) * TimeSpan.TicksPerSecond);
+    }
+
+    /// <summary>
+    /// Computes a rider's classification time in whole seconds, that is, the elapsed time between
+    /// the race start and the rider's last recorded crossing, floored to whole seconds. This is
+    /// exactly the value shown in the race-time column, so gaps derived from it are always
+    /// consistent with the displayed race times. A negative elapsed time, which should never occur,
+    /// is clamped to zero.
+    /// </summary>
+    /// <param name="lastCrossingTicks">The instant of the rider's last recorded crossing, in ticks.</param>
+    /// <param name="raceStartTicks">The instant at which the race started, in ticks.</param>
+    /// <returns>The rider's classification time, expressed in whole seconds.</returns>
+    private static long ClassificationSeconds(long lastCrossingTicks, long raceStartTicks)
+    {
+        var elapsedTicks = Math.Max(0, lastCrossingTicks - raceStartTicks);
+        return elapsedTicks / TimeSpan.TicksPerSecond;
     }
 }

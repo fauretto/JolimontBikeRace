@@ -31,6 +31,7 @@ public class StandingsViewModel : ViewModelBase
     private IReadOnlyList<StandingEntry> _lastComputedStandings = new List<StandingEntry>();
 
     private Race? _selectedRace;
+    private CategoryStandings? _selectedCategoryStandings;
     private string _statusMessage = string.Empty;
 
     /// <summary>
@@ -92,6 +93,18 @@ public class StandingsViewModel : ViewModelBase
     /// Gets the computed standings, grouped per category, one entry per tab.
     /// </summary>
     public ObservableCollection<CategoryStandings> CategoryStandingsList { get; }
+
+    /// <summary>
+    /// Gets or sets the category standings tab currently selected on the screen. Export and print
+    /// operate on this selection: the "Overall" tab exports and prints every tab (the scratch
+    /// ranking plus one section per category), while a specific category tab exports and prints
+    /// only that category.
+    /// </summary>
+    public CategoryStandings? SelectedCategoryStandings
+    {
+        get => _selectedCategoryStandings;
+        set => SetProperty(ref _selectedCategoryStandings, value);
+    }
 
     /// <summary>
     /// Gets or sets the race that the standings are computed for.
@@ -191,7 +204,7 @@ public class StandingsViewModel : ViewModelBase
 
             CategoryStandingsList.Clear();
 
-            var overallTab = new CategoryStandings("Overall");
+            var overallTab = new CategoryStandings("Overall", isOverall: true);
             foreach (var entry in _lastComputedStandings)
             {
                 overallTab.Entries.Add(entry);
@@ -202,12 +215,15 @@ public class StandingsViewModel : ViewModelBase
             foreach (var categoryName in selectedCategoryNames)
             {
                 var categoryTab = new CategoryStandings(categoryName);
-                foreach (var entry in _lastComputedStandings.Where(entry => entry.CategoryName == categoryName))
+                var categoryEntries = _lastComputedStandings.Where(entry => entry.CategoryName == categoryName).ToList();
+                foreach (var entry in _standingsCalculatorService.RankWithinCategory(categoryEntries, SelectedRace.StartTicks))
                 {
                     categoryTab.Entries.Add(entry);
                 }
                 CategoryStandingsList.Add(categoryTab);
             }
+
+            SelectedCategoryStandings = CategoryStandingsList.FirstOrDefault();
 
             SaveToDatabaseCommand.NotifyCanExecuteChanged();
             ExportCommaSeparatedValuesCommand.NotifyCanExecuteChanged();
@@ -243,17 +259,39 @@ public class StandingsViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Returns the category standings tabs that Export and Print must act on, based on the tab
+    /// currently selected on the screen. When the "Overall" tab is selected (or nothing is), every
+    /// tab is returned — the scratch ranking followed by each category section; otherwise only the
+    /// selected category tab is returned.
+    /// </summary>
+    /// <returns>The category standings tabs to export or print.</returns>
+    private IReadOnlyList<CategoryStandings> GetStandingsToOutput()
+    {
+        var selected = SelectedCategoryStandings;
+        if (selected is null || selected.IsOverall)
+        {
+            return CategoryStandingsList.ToList();
+        }
+
+        return new List<CategoryStandings> { selected };
+    }
+
     private void ExportCommaSeparatedValues()
     {
-        if (_lastComputedStandings.Count == 0)
+        var sections = GetStandingsToOutput();
+        if (sections.Count == 0)
         {
             return;
         }
 
+        var selected = SelectedCategoryStandings;
+        var fileNameCategorySuffix = selected is not null && !selected.IsOverall ? $"_{selected.CategoryName}" : string.Empty;
+
         var saveFileDialog = new SaveFileDialog
         {
             Filter = "Comma Separated Values (*.csv)|*.csv",
-            FileName = $"{SelectedRace?.Name}_Standings.csv",
+            FileName = $"{SelectedRace?.Name}{fileNameCategorySuffix}_Standings.csv",
         };
 
         if (saveFileDialog.ShowDialog() != true)
@@ -264,18 +302,27 @@ public class StandingsViewModel : ViewModelBase
         try
         {
             var builder = new StringBuilder();
-            builder.AppendLine("Position,BibNumber,Rider,Category,Laps,RaceTime,Gap");
 
-            foreach (var entry in _lastComputedStandings)
+            foreach (var section in sections)
             {
-                builder.AppendLine(string.Join(",",
-                    entry.Position,
-                    entry.BibNumber,
-                    EscapeCommaSeparatedValue(entry.BikerFullName),
-                    EscapeCommaSeparatedValue(entry.CategoryName),
-                    entry.CompletedLaps,
-                    EscapeCommaSeparatedValue(entry.RaceTime),
-                    EscapeCommaSeparatedValue(entry.Gap)));
+                // Each tab is written as its own section, titled with the category name, so the
+                // export reflects exactly what the selected tab shows.
+                builder.AppendLine(EscapeCommaSeparatedValue(section.CategoryName));
+                builder.AppendLine("Position,BibNumber,Rider,Category,Laps,RaceTime,Gap");
+
+                foreach (var entry in section.Entries)
+                {
+                    builder.AppendLine(string.Join(",",
+                        entry.Position,
+                        entry.BibNumber,
+                        EscapeCommaSeparatedValue(entry.BikerFullName),
+                        EscapeCommaSeparatedValue(entry.CategoryName),
+                        entry.CompletedLaps,
+                        EscapeCommaSeparatedValue(entry.RaceTime),
+                        EscapeCommaSeparatedValue(entry.Gap)));
+                }
+
+                builder.AppendLine();
             }
 
             File.WriteAllText(saveFileDialog.FileName, builder.ToString());
@@ -318,7 +365,7 @@ public class StandingsViewModel : ViewModelBase
                 FontWeight = FontWeights.Bold,
             });
 
-            foreach (var categoryStandings in CategoryStandingsList)
+            foreach (var categoryStandings in GetStandingsToOutput())
             {
                 flowDocument.Blocks.Add(new Paragraph(new Run(categoryStandings.CategoryName))
                 {
@@ -431,9 +478,11 @@ public class CategoryStandings
     /// Initializes a new instance of the <see cref="CategoryStandings"/> class.
     /// </summary>
     /// <param name="categoryName">The name of the category, used as the tab header.</param>
-    public CategoryStandings(string categoryName)
+    /// <param name="isOverall">A value indicating whether this tab is the combined overall ranking rather than a single category.</param>
+    public CategoryStandings(string categoryName, bool isOverall = false)
     {
         CategoryName = categoryName;
+        IsOverall = isOverall;
         Entries = new ObservableCollection<StandingEntry>();
     }
 
@@ -441,6 +490,12 @@ public class CategoryStandings
     /// Gets the name of the category, used as the tab header.
     /// </summary>
     public string CategoryName { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether this tab is the combined overall (scratch) ranking rather
+    /// than a single category.
+    /// </summary>
+    public bool IsOverall { get; }
 
     /// <summary>
     /// Gets the ranked standing entries belonging to this category.

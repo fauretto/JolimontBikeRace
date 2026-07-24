@@ -189,4 +189,43 @@ public class PostgresBikerRepository : IBikerRepository
             throw;
         }
     }
+
+    /// <summary>
+    /// Deletes a biker together with every dependent record referencing it, as a single atomic
+    /// transaction: raw crossings (race_standings), computed results (standing), registrations
+    /// (biker_race_category) and finally the biker row itself.
+    /// </summary>
+    public async Task DeleteWithDependenciesAsync(long identifier)
+    {
+        try
+        {
+            await using var connection = new NpgsqlConnection(_connectionStringProvider.ConnectionString);
+            await connection.OpenAsync();
+
+            await using var transaction = await connection.BeginTransactionAsync();
+
+            var crossingsDeleted = await ExecuteDeleteAsync(connection, transaction, "DELETE FROM race_standings WHERE idbiker = @idbiker", identifier);
+            var standingsDeleted = await ExecuteDeleteAsync(connection, transaction, "DELETE FROM standing WHERE idbiker = @idbiker", identifier);
+            var registrationsDeleted = await ExecuteDeleteAsync(connection, transaction, "DELETE FROM biker_race_category WHERE idbiker = @idbiker", identifier);
+            await ExecuteDeleteAsync(connection, transaction, "DELETE FROM biker WHERE idbiker = @idbiker", identifier);
+
+            await transaction.CommitAsync();
+
+            _logService.Information(
+                "PostgresBikerRepository -> DeleteWithDependenciesAsync",
+                $"deleted biker {identifier} with {registrationsDeleted} registration(s), {standingsDeleted} standing(s) and {crossingsDeleted} crossing(s)");
+        }
+        catch (Exception exception)
+        {
+            _logService.Error("PostgresBikerRepository -> DeleteWithDependenciesAsync", $"failed to delete biker {identifier} with its dependent records", exception);
+            throw;
+        }
+    }
+
+    private static async Task<int> ExecuteDeleteAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string commandText, long identifier)
+    {
+        await using var command = new NpgsqlCommand(commandText, connection, transaction);
+        command.Parameters.AddWithValue("idbiker", identifier);
+        return await command.ExecuteNonQueryAsync();
+    }
 }

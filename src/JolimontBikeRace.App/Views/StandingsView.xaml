@@ -42,7 +42,7 @@
 
         <!-- Tabs, one per category, each with a read-only standings grid. -->
         <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
-            <TabControl ItemsSource="{Binding CategoryStandingsList}" BorderThickness="0" Background="Transparent">
+            <TabControl ItemsSource="{Binding CategoryStandingsList}" SelectedItem="{Binding SelectedCategoryStandings, Mode=TwoWay}" BorderThickness="0" Background="Transparent">
                 <TabControl.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding CategoryName}" Padding="8,4" />

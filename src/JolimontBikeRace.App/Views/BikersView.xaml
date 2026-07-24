@@ -18,7 +18,7 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
             <TextBox Width="320" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Tag="Search bikers..." />
             <Button Content="New Biker" Command="{Binding NewBikerCommand}" Margin="12,0,0,0" />
-            <TextBlock Text="{Binding Bikers.Count, StringFormat='{}{0} bikers'}" VerticalAlignment="Center" Margin="16,0,0,0"
+            <TextBlock Text="{Binding BikerRows.Count, StringFormat='{}{0} bikers'}" VerticalAlignment="Center" Margin="16,0,0,0"
                        Foreground="{StaticResource TextSecondaryBrush}" />
         </StackPanel>
 
@@ -31,19 +31,21 @@
 
             <!-- Center: read-only biker data grid. -->
             <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
-                <DataGrid ItemsSource="{Binding BikersView}" SelectedItem="{Binding SelectedBiker}" IsReadOnly="True">
+                <DataGrid x:Name="BikerDataGrid" ItemsSource="{Binding BikersView}" SelectedItem="{Binding SelectedBikerRow}"
+                          IsReadOnly="True" CanUserDeleteRows="False" PreviewKeyDown="BikerDataGrid_PreviewKeyDown">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Full Name" Binding="{Binding FullName}" Width="2*" />
-                        <DataGridTextColumn Header="Year Of Birth" Binding="{Binding YearOfBirth}" Width="1*" />
-                        <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="2*" />
-                        <DataGridTextColumn Header="Electronic Mail" Binding="{Binding ElectronicMailAddress}" Width="2*" />
-                        <DataGridTextColumn Header="Telephone" Binding="{Binding Telephone}" Width="1*" />
-                        <DataGridTextColumn Header="Mobile Telephone" Binding="{Binding MobileTelephone}" Width="1*" />
+                        <DataGridTextColumn Header="Full Name" Binding="{Binding Biker.FullName}" Width="2*" />
+                        <DataGridTextColumn Header="Bib Number" Binding="{Binding BibNumber}" Width="0.8*" />
+                        <DataGridTextColumn Header="Year Of Birth" Binding="{Binding Biker.YearOfBirth}" Width="1*" />
+                        <DataGridTextColumn Header="Address" Binding="{Binding Biker.Address}" Width="2*" />
+                        <DataGridTextColumn Header="Electronic Mail" Binding="{Binding Biker.ElectronicMailAddress}" Width="2*" />
+                        <DataGridTextColumn Header="Telephone" Binding="{Binding Biker.Telephone}" Width="1*" />
+                        <DataGridTextColumn Header="Mobile Telephone" Binding="{Binding Biker.MobileTelephone}" Width="1*" />
                     </DataGrid.Columns>
                 </DataGrid>
             </Border>
 
-            <!-- Right: biker detail editor, registration panel and registration history. -->
+            <!-- Right: biker detail editor, registration panel and registered bikers of the selected race. -->
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
@@ -65,6 +67,7 @@
                             <TextBox Text="{Binding SelectedBiker.MobileTelephone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
 
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Clear" Command="{Binding ClearBikerDetailsCommand}" Margin="0,0,8,0" />
                                 <Button Content="Save" Style="{StaticResource AccentButtonStyle}" Command="{Binding SaveBikerCommand}" Margin="0,0,8,0" />
                                 <Button Content="Delete" Style="{StaticResource DangerButtonStyle}" Command="{Binding DeleteBikerCommand}" />
                             </StackPanel>
@@ -77,6 +80,18 @@
                             <TextBlock Text="Race" Foreground="{StaticResource TextSecondaryBrush}" />
                             <ComboBox ItemsSource="{Binding Races}" SelectedItem="{Binding SelectedRegistrationRace}"
                                       DisplayMemberPath="Name" Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding AlreadyRegisteredText}" TextWrapping="Wrap" Margin="0,0,0,8">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding AlreadyRegisteredText}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <TextBlock Text="Category" Foreground="{StaticResource TextSecondaryBrush}" />
                             <ComboBox ItemsSource="{Binding RegistrationCategories}" SelectedItem="{Binding SelectedRegistrationCategory}"
                                       DisplayMemberPath="Name" Margin="0,0,0,4" />
@@ -86,21 +101,63 @@
 
                             <Button Content="Register" Style="{StaticResource AccentButtonStyle}" Command="{Binding RegisterCommand}"
                                     HorizontalAlignment="Right" Margin="0,0,0,8" />
+                            <TextBlock Text="{Binding RegistrationHint}" FontSize="11" HorizontalAlignment="Right" TextWrapping="Wrap" Margin="0,0,0,4">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding RegistrationHint}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource AccentDarkBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
 
                     <Border Style="{StaticResource CardBorderStyle}">
                         <StackPanel>
-                            <TextBlock Text="Registration History" FontWeight="SemiBold" Margin="0,0,0,8" />
-                            <ListView ItemsSource="{Binding RegistrationHistory}" MaxHeight="220">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="Registered Bikers" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding RegisteredBikers.Count, StringFormat='{}{0} registered'}"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="8,0,0,0" />
+                            </StackPanel>
+                            <TextBlock Text="Select a race above to display its registered bikers."
+                                       Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,4">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedRegistrationRace}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <ListView ItemsSource="{Binding RegisteredBikersView}" MaxHeight="320"
+                                      ScrollViewer.VerticalScrollBarVisibility="Auto">
                                 <ListView.View>
                                     <GridView>
-                                        <GridViewColumn Header="Race Identifier" DisplayMemberBinding="{Binding RaceIdentifier}" />
-                                        <GridViewColumn Header="Category Identifier" DisplayMemberBinding="{Binding CategoryIdentifier}" />
-                                        <GridViewColumn Header="Bib Number" DisplayMemberBinding="{Binding BibNumber}" />
+                                        <GridViewColumn Header="Bib Number" DisplayMemberBinding="{Binding BibNumberText}" Width="90" />
+                                        <GridViewColumn Header="Full Name" DisplayMemberBinding="{Binding BikerFullName}" Width="220" />
                                     </GridView>
                                 </ListView.View>
+                                <ListView.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,2">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding ItemCount, StringFormat=' ({0})'}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ListView.GroupStyle>
                             </ListView>
                         </StackPanel>
                     </Border>

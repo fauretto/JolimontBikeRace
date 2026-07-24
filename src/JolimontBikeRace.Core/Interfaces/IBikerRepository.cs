@@ -38,4 +38,13 @@ public interface IBikerRepository
     /// </summary>
     /// <param name="identifier">The unique identifier of the biker to delete.</param>
     Task DeleteAsync(long identifier);
+
+    /// <summary>
+    /// Deletes a biker together with every dependent record referencing it: its registrations
+    /// (biker_race_category), its computed race results (standing) and its raw finish-line
+    /// crossings (race_standings). The whole operation is performed as a single atomic
+    /// transaction so a biker is never left partially deleted.
+    /// </summary>
+    /// <param name="identifier">The unique identifier of the biker to delete.</param>
+    Task DeleteWithDependenciesAsync(long identifier);
 }

@@ -162,4 +162,72 @@ public class StandingsCalculatorServiceTests
 
         Assert.Equal("0:45:00", standings[0].RaceTime);
     }
+
+    [Fact]
+    public void RankWithinCategory_RenumbersPositionsFromOne()
+    {
+        var service = new StandingsCalculatorService();
+        const long baseTicks = 1000;
+
+        var categoryEntries = new List<StandingEntry>
+        {
+            new() { BikerIdentifier = 1, Position = 3, CompletedLaps = 4, Ticks = baseTicks + TimeSpan.FromMinutes(30).Ticks },
+            new() { BikerIdentifier = 2, Position = 5, CompletedLaps = 4, Ticks = baseTicks + TimeSpan.FromMinutes(31).Ticks },
+            new() { BikerIdentifier = 3, Position = 8, CompletedLaps = 4, Ticks = baseTicks + TimeSpan.FromMinutes(32).Ticks },
+        };
+
+        var rankedEntries = service.RankWithinCategory(categoryEntries, 0L);
+
+        Assert.Equal(3, rankedEntries.Count);
+        Assert.Equal(1, rankedEntries[0].Position);
+        Assert.Equal(1, rankedEntries[0].BikerIdentifier);
+        Assert.Equal(2, rankedEntries[1].Position);
+        Assert.Equal(2, rankedEntries[1].BikerIdentifier);
+        Assert.Equal(3, rankedEntries[2].Position);
+        Assert.Equal(3, rankedEntries[2].BikerIdentifier);
+    }
+
+    [Fact]
+    public void RankWithinCategory_RecomputesGapRelativeToCategoryLeader()
+    {
+        var service = new StandingsCalculatorService();
+        const long baseTicks = 1000;
+        var leaderTicks = baseTicks + TimeSpan.FromMinutes(30).Ticks;
+        var secondTicks = leaderTicks + TimeSpan.FromSeconds(5).Ticks;
+
+        var categoryEntries = new List<StandingEntry>
+        {
+            new() { BikerIdentifier = 1, Position = 3, CompletedLaps = 4, Ticks = leaderTicks },
+            new() { BikerIdentifier = 2, Position = 5, CompletedLaps = 4, Ticks = secondTicks },
+        };
+
+        var rankedEntries = service.RankWithinCategory(categoryEntries, 0L);
+
+        Assert.Equal(string.Empty, rankedEntries[0].Gap);
+        Assert.Equal("+0:05", rankedEntries[1].Gap);
+    }
+
+    [Fact]
+    public void ComputeStandings_GapMatchesDifferenceOfWholeSecondRaceTimes()
+    {
+        var service = new StandingsCalculatorService();
+        const long raceStartTicks = 100;
+        var race = new Race { Identifier = 1, Name = "Test Race", StartTicks = raceStartTicks };
+
+        // Two riders, same lap count. The leader's elapsed time is 44.9 s and the follower's is
+        // 50.1 s, so the displayed race times floor to 0:00:44 and 0:00:50 and the gap must read
+        // "+0:06" (50 - 44), not the "+0:05" that flooring the raw 5.2 s difference would give.
+        var crossings = new List<Crossing>
+        {
+            new() { BikerIdentifier = 1, RaceIdentifier = 1, SequenceIndex = 1, Ticks = raceStartTicks + (long)(44.9 * TimeSpan.TicksPerSecond) },
+            new() { BikerIdentifier = 2, RaceIdentifier = 1, SequenceIndex = 2, Ticks = raceStartTicks + (long)(50.1 * TimeSpan.TicksPerSecond) },
+        };
+
+        var standings = service.ComputeStandings(race, crossings, EmptyRegistrations, EmptyBikers, EmptyCategories);
+
+        Assert.Equal("0:00:44", standings[0].RaceTime);
+        Assert.Equal("0:00:50", standings[1].RaceTime);
+        Assert.Equal(string.Empty, standings[0].Gap);
+        Assert.Equal("+0:06", standings[1].Gap);
+    }
 }

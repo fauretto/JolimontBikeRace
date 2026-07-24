@@ -660,19 +660,24 @@ public class ChronoViewModel : ViewModelBase
                 && !journalRaceIdentifiers.Contains(SelectedRace.Identifier);
             if (belongsToAnotherRace)
             {
-                LogService.Warning("ChronoViewModel -> LoadJournalAsync", $"journal file {openFileDialog.FileName} belongs to race {string.Join(", ", journalRaceIdentifiers)} but race {SelectedRace.Identifier} is selected");
+                // The journal was recorded for a different race. Loading it would overwrite the
+                // selected race's crossings with another race's timing data, so the load is blocked
+                // outright rather than merely warned about.
+                LogService.Warning("ChronoViewModel -> LoadJournalAsync", $"blocked loading journal file {openFileDialog.FileName}: it belongs to race {string.Join(", ", journalRaceIdentifiers)} but race {SelectedRace.Identifier} is selected");
+                MessageBox.Show(
+                    $"The selected journal file belongs to a different race (race identifier "
+                    + $"{string.Join(", ", journalRaceIdentifiers)}), not to \"{SelectedRace.Name}\". "
+                    + $"Loading it has been cancelled to protect this race's timing data. Select the race "
+                    + $"the journal was recorded for, or choose a journal recorded for \"{SelectedRace.Name}\".",
+                    "Journal Does Not Match The Selected Race",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Stop);
+                return;
             }
 
-            var confirmationText = belongsToAnotherRace
-                ? $"The selected journal file belongs to a different race (race identifier "
-                  + $"{string.Join(", ", journalRaceIdentifiers)}), not to \"{SelectedRace.Name}\". "
-                  + $"Loading it will permanently replace every recorded crossing of \"{SelectedRace.Name}\" "
-                  + $"with the {crossings.Count} crossings of the journal file. Continue?"
-                : $"This will permanently replace every recorded crossing of race \"{SelectedRace.Name}\" "
-                  + $"in the database with the {crossings.Count} crossings of the selected journal file. Continue?";
-
             var confirmationResult = MessageBox.Show(
-                confirmationText,
+                $"This will permanently replace every recorded crossing of race \"{SelectedRace.Name}\" "
+                + $"in the database with the {crossings.Count} crossings of the selected journal file. Continue?",
                 "Confirm Journal Load",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
