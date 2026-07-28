@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.Input;
 using JolimontBikeRace.Core.Interfaces;
@@ -28,6 +29,7 @@ public class ShellViewModel : ViewModelBase
     /// </summary>
     /// <param name="databaseConnectionService">The service used to verify database connectivity.</param>
     /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
+    /// <param name="brandingProvider">The provider of the customer-configurable name shown across the application.</param>
     /// <param name="raceManagerViewModel">The Race Manager section view model.</param>
     /// <param name="bikersViewModel">The Bikers section view model.</param>
     /// <param name="chronoViewModel">The Chrono section view model.</param>
@@ -36,6 +38,7 @@ public class ShellViewModel : ViewModelBase
     public ShellViewModel(
         IDatabaseConnectionService databaseConnectionService,
         IRaceCollectionService raceCollectionService,
+        IBrandingProvider brandingProvider,
         RaceManagerViewModel raceManagerViewModel,
         BikersViewModel bikersViewModel,
         ChronoViewModel chronoViewModel,
@@ -51,7 +54,13 @@ public class ShellViewModel : ViewModelBase
         ChronoViewModel = chronoViewModel;
         StandingsViewModel = standingsViewModel;
 
-        Title = "Jolimont Bike Race";
+        // Keep the shared active race (shown in the header combo box) in step with the race
+        // selected inside the Race Manager section, so that selecting a race in either place
+        // updates the other. The reverse direction (header combo box down into the sections) is
+        // handled by the SelectedRace setter below.
+        raceManagerViewModel.PropertyChanged += OnRaceManagerViewModelPropertyChanged;
+
+        Title = brandingProvider.RaceName;
 
         _currentViewModel = raceManagerViewModel;
 
@@ -113,6 +122,23 @@ public class ShellViewModel : ViewModelBase
                 ChronoViewModel.SelectedRace = value;
                 StandingsViewModel.SelectedRace = value;
             }
+        }
+    }
+
+    /// <summary>
+    /// Reacts to a change of the race selected inside the Race Manager section by mirroring it
+    /// into the shared <see cref="SelectedRace"/>, so that selecting a race in the Race Manager
+    /// list also updates the header combo box and every other section. Assigning the same race
+    /// instance back is harmless: the <see cref="SelectedRace"/> setter uses SetProperty, which
+    /// does nothing when the value is unchanged, so this cannot cause an endless update loop.
+    /// </summary>
+    /// <param name="sender">The Race Manager view model that raised the change notification.</param>
+    /// <param name="eventArguments">The details of the property that changed.</param>
+    private void OnRaceManagerViewModelPropertyChanged(object? sender, PropertyChangedEventArgs eventArguments)
+    {
+        if (eventArguments.PropertyName == nameof(RaceManagerViewModel.SelectedRace))
+        {
+            SelectedRace = RaceManagerViewModel.SelectedRace;
         }
     }
 

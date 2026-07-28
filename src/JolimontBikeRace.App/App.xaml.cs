@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using JolimontBikeRace.App.Services;
@@ -54,18 +55,100 @@ public partial class App : Application
         // application must follow.
         logService.Information("App -> OnStartup", "application starting");
 
-        var shellWindow = _host.Services.GetRequiredService<ShellWindow>();
-        MainWindow = shellWindow;
-        shellWindow.Show();
+        // Keep the application alive while only the splash window is visible, so that closing the
+        // splash before the main window is shown does not shut the application down. The normal
+        // shutdown mode is restored once the main window has been shown.
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        var shellViewModel = _host.Services.GetRequiredService<ShellViewModel>();
+        // Show the "Checking the database, please wait" splash, verify (and if necessary create)
+        // the database, and only then show the main window. This runs without being awaited here
+        // so that the user interface message loop stays responsive and the splash animates.
+        _ = StartApplicationAsync();
+    }
 
-        // The database connectivity check and the initial data load run in the background,
-        // without being awaited here, so that an unreachable database never delays the display of
-        // the main window. The shell view model exposes the outcome through its
-        // IsDatabaseConnected property, which starts in a "Disconnected" state until the check
-        // completes.
-        _ = shellViewModel.InitializeAsync();
+    // Shows the splash window, ensures the database exists, and then shows the main window. Runs
+    // as a fire-and-forget task started from OnStartup so the user interface stays responsive.
+    private async Task StartApplicationAsync()
+    {
+        var logService = _host!.Services.GetRequiredService<ILogService>();
+        var brandingProvider = _host.Services.GetRequiredService<IBrandingProvider>();
+
+        var splashWindow = new StartupSplashWindow(brandingProvider.RaceName);
+        splashWindow.Show();
+
+        try
+        {
+            var initializationService = _host.Services.GetRequiredService<IDatabaseInitializationService>();
+            var outcome = await EnsureDatabaseWithRetryAsync(initializationService, logService);
+
+            if (outcome is null)
+            {
+                // The user chose to close the application from the retry dialog; shutdown is in
+                // progress, so simply close the splash and stop.
+                splashWindow.Close();
+                return;
+            }
+
+            var shellWindow = _host.Services.GetRequiredService<ShellWindow>();
+            MainWindow = shellWindow;
+            ShutdownMode = ShutdownMode.OnLastWindowClose;
+            shellWindow.Show();
+            splashWindow.Close();
+
+            if (outcome == DatabaseInitializationOutcome.Created)
+            {
+                logService.Information("App -> StartApplicationAsync", "a new database was created at startup");
+                MessageBox.Show(
+                    "A new, empty database was created for this application.",
+                    "Database Created",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+
+            var shellViewModel = _host.Services.GetRequiredService<ShellViewModel>();
+
+            // The database connectivity check and the initial data load run in the background,
+            // without being awaited here, so that the main window is shown without delay.
+            _ = shellViewModel.InitializeAsync();
+        }
+        catch (Exception exception)
+        {
+            // EnsureDatabaseWithRetryAsync already handles database errors, so reaching here means
+            // an unexpected failure. Close the splash, report it, and shut down rather than leaving
+            // the application stuck on the splash window.
+            logService.Error("App -> StartApplicationAsync", "an unexpected failure occurred during startup", exception);
+            splashWindow.Close();
+            MessageBox.Show(exception.Message, "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
+    }
+
+    // Runs the database existence check and creation, showing a Retry/Cancel dialog when it fails.
+    // Returns the outcome on success, or null when the user cancels, in which case the application
+    // is shut down.
+    private async Task<DatabaseInitializationOutcome?> EnsureDatabaseWithRetryAsync(IDatabaseInitializationService initializationService, ILogService logService)
+    {
+        while (true)
+        {
+            try
+            {
+                return await initializationService.EnsureDatabaseExistsAsync();
+            }
+            catch (Exception exception)
+            {
+                logService.Error("App -> EnsureDatabaseWithRetryAsync", "failed to verify or create the database", exception);
+                var choice = MessageBox.Show(
+                    $"The application could not verify or create its database.\n\n{exception.Message}\n\nClick Retry to try again, or Cancel to close the application.",
+                    "Checking The Database",
+                    MessageBoxButton.RetryCancel,
+                    MessageBoxImage.Error);
+                if (choice != MessageBoxResult.Retry)
+                {
+                    Shutdown();
+                    return null;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -100,6 +183,10 @@ public partial class App : Application
         var connectionString = configuration["Database:ConnectionString"] ?? string.Empty;
         services.AddSingleton<IConnectionStringProvider>(new ConnectionStringProvider(connectionString));
 
+        var brandingFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "branding.xml");
+        services.AddSingleton<IBrandingProvider>(serviceProvider =>
+            new XmlBrandingProvider(brandingFilePath, serviceProvider.GetRequiredService<ILogService>()));
+
         services.AddSingleton<IBikerRepository, PostgresBikerRepository>();
         services.AddSingleton<IRaceRepository, PostgresRaceRepository>();
         services.AddSingleton<ICategoryRepository, PostgresCategoryRepository>();
@@ -108,6 +195,7 @@ public partial class App : Application
         services.AddSingleton<ICrossingRepository, PostgresCrossingRepository>();
         services.AddSingleton<IStandingRepository, PostgresStandingRepository>();
         services.AddSingleton<IDatabaseConnectionService, PostgresDatabaseConnectionService>();
+        services.AddSingleton<IDatabaseInitializationService, PostgresDatabaseInitializationService>();
         services.AddSingleton<IRaceStandingsJournalService, XmlRaceStandingsJournalService>();
 
         services.AddSingleton<IStandingsCalculatorService, StandingsCalculatorService>();

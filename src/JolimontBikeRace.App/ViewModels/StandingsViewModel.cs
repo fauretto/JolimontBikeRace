@@ -27,6 +27,7 @@ public class StandingsViewModel : ViewModelBase
     private readonly IStandingsCalculatorService _standingsCalculatorService;
     private readonly IStandingRepository _standingRepository;
     private readonly IRaceCollectionService _raceCollectionService;
+    private readonly IBrandingProvider _brandingProvider;
 
     private IReadOnlyList<StandingEntry> _lastComputedStandings = new List<StandingEntry>();
 
@@ -45,6 +46,7 @@ public class StandingsViewModel : ViewModelBase
     /// <param name="standingsCalculatorService">The service used to compute the final classification.</param>
     /// <param name="standingRepository">The repository used to persist the official results.</param>
     /// <param name="raceCollectionService">The service that owns the single shared list of races.</param>
+    /// <param name="brandingProvider">The provider of the customer-configurable name shown across the application.</param>
     /// <param name="logService">The logging service used to record every standings operation.</param>
     public StandingsViewModel(
         ICrossingRepository crossingRepository,
@@ -55,6 +57,7 @@ public class StandingsViewModel : ViewModelBase
         IStandingsCalculatorService standingsCalculatorService,
         IStandingRepository standingRepository,
         IRaceCollectionService raceCollectionService,
+        IBrandingProvider brandingProvider,
         ILogService logService)
         : base(logService)
     {
@@ -66,6 +69,7 @@ public class StandingsViewModel : ViewModelBase
         _standingsCalculatorService = standingsCalculatorService;
         _standingRepository = standingRepository;
         _raceCollectionService = raceCollectionService;
+        _brandingProvider = brandingProvider;
 
         Title = "Standings";
         CategoryCheckboxes = new ObservableCollection<CategoryCheckboxRow>();
@@ -394,7 +398,7 @@ public class StandingsViewModel : ViewModelBase
             var printDialog = new PrintDialog();
             if (printDialog.ShowDialog() == true)
             {
-                printDialog.PrintDocument(((IDocumentPaginatorSource)flowDocument).DocumentPaginator, "Jolimont Bike Race Standings");
+                printDialog.PrintDocument(((IDocumentPaginatorSource)flowDocument).DocumentPaginator, $"{_brandingProvider.RaceName} Standings");
                 LogService.Information("StandingsViewModel -> Print", $"printed standings for race {SelectedRace?.Identifier}");
             }
         }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Customize the name shown across the application by editing RaceName below,
+     then restart the application. -->
+<Branding>
+  <RaceName>Jolimont Bike Race</RaceName>
+</Branding>

@@ -8,6 +8,12 @@
     <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\Database\create_jolimontbikerace_schema.sql">
+      <LogicalName>JolimontBikeRace.Data.create_jolimontbikerace_schema.sql</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -22,7 +22,7 @@
 
 CREATE DATABASE jolimontbikerace WITH TEMPLATE = template0 ENCODING = 'UTF8';
 
-\connect jolimontbikerace
+connect jolimontbikerace
 
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;

@@ -7,7 +7,7 @@
         xmlns:views="clr-namespace:JolimontBikeRace.App.Views"
         xmlns:converters="clr-namespace:JolimontBikeRace.App.Converters"
         mc:Ignorable="d"
-        Title="Jolimont Bike Race" Height="800" Width="1300"
+        Title="{Binding Title}" Icon="/Assets/race.ico" Height="800" Width="1300"
         Background="{StaticResource SurfaceAltBrush}"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
@@ -48,7 +48,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Jolimont Bike Race" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <TextBlock Text="Active race:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextSecondaryBrush}" />
                     <ComboBox Width="260" ItemsSource="{Binding Races}" SelectedItem="{Binding SelectedRace}" DisplayMemberPath="Name" />
@@ -58,7 +58,8 @@
 
         <!-- Left navigation rail. -->
         <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" Background="{StaticResource AccentBrush}">
-            <TextBlock Text="JBR" Foreground="White" FontSize="26" FontWeight="Bold" Margin="20,20,20,30" />
+            <Image Source="/Assets/race-logo.png" Width="120" Height="120" Margin="20,20,20,20"
+                   HorizontalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
 
             <RadioButton Content="Race Manager" GroupName="Navigation" Style="{StaticResource NavigationRailButtonStyle}"
                          Command="{Binding ShowRaceManagerCommand}">
